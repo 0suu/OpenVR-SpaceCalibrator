@@ -62,10 +62,12 @@ public:
 	bool enableStaticRecalibration;
 	bool lockRelativePosition = false;
 	
-	const Eigen::AffineCompact3d Transformation() const 
-	{
-		return m_estimatedTransformation;
-	}
+        const Eigen::AffineCompact3d Transformation() const
+        {
+                return m_estimatedTransformation;
+        }
+
+        float ScaleFactor() const { return m_scaleFactor; }
 
 	const Eigen::Vector3d EulerRotation() const {
 		auto rot = m_estimatedTransformation.rotation();
@@ -117,9 +119,10 @@ public:
 	long m_calcCycle;
 
 private:
-	bool m_isValid;
-	Eigen::AffineCompact3d m_estimatedTransformation;
-	bool m_relativePosCalibrated = false;
+        bool m_isValid;
+        Eigen::AffineCompact3d m_estimatedTransformation;
+        bool m_relativePosCalibrated = false;
+        float m_scaleFactor = 1.0f;
 
 	/*
 	 * This affine transform estimates the pose of the target within the reference device's local pose space.
@@ -134,7 +137,7 @@ private:
 	Eigen::Vector3d CalibrateTranslation(const Eigen::Matrix3d &rotation) const;
 	void CalibrateScaleOffset(const Eigen::Matrix3d &rotation, Eigen::Vector3d* out_scaleOffset, float* out_scaleFactor) const;
 
-	Eigen::AffineCompact3d ComputeCalibration(const bool ignoreOutliers) const;
+        Eigen::AffineCompact3d ComputeCalibration(const bool ignoreOutliers);
 
 	double RetargetingErrorRMS(const Eigen::Vector3d& hmdToTargetPos, const Eigen::AffineCompact3d& calibration) const;
 	Eigen::Vector3d ComputeRefToTargetOffset(const Eigen::AffineCompact3d& calibration) const;

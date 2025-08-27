@@ -605,11 +605,12 @@ void CalibrationTick(double time)
 		calibration.ComputeOneshot(CalCtx.ignoreOutliers);
 	}
 
-	if (calibration.isValid()) {
-		ctx.calibratedRotation = calibration.EulerRotation();
-		ctx.calibratedTranslation = calibration.Transformation().translation() * 100.0; // convert to cm units for profile storage
-		ctx.refToTargetPose = calibration.RelativeTransformation();
-		ctx.relativePosCalibrated = calibration.isRelativeTransformationCalibrated();
+        if (calibration.isValid()) {
+                ctx.calibratedRotation = calibration.EulerRotation();
+                ctx.calibratedTranslation = calibration.Transformation().translation() * 100.0; // convert to cm units for profile storage
+                ctx.calibratedScale = calibration.ScaleFactor();
+                ctx.refToTargetPose = calibration.RelativeTransformation();
+                ctx.relativePosCalibrated = calibration.isRelativeTransformationCalibrated();
 
 		auto vrTrans = VRTranslationVec(ctx.calibratedTranslation);
 		auto vrRot = VRRotationQuat(Eigen::Quaterniond(calibration.Transformation().rotation()));

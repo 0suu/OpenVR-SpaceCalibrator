@@ -113,12 +113,13 @@ void CalibrationCalc::PushSample(const Sample& sample) {
 }
 
 void CalibrationCalc::Clear() {
-	m_estimatedTransformation.setIdentity();
-	m_isValid = false;
-	m_samples.clear();
-	m_axisVariance = 0.0;
-	m_refToTargetPose = Eigen::AffineCompact3d::Identity();
-	m_relativePosCalibrated = false;
+        m_estimatedTransformation.setIdentity();
+        m_isValid = false;
+        m_samples.clear();
+        m_axisVariance = 0.0;
+        m_refToTargetPose = Eigen::AffineCompact3d::Identity();
+        m_relativePosCalibrated = false;
+        m_scaleFactor = 1.0f;
 }
 
 std::vector<bool> CalibrationCalc::DetectOutliers() const {
@@ -315,7 +316,50 @@ Eigen::Vector3d CalibrationCalc::CalibrateTranslation(const Eigen::Matrix3d &rot
 }
 
 void CalibrationCalc::CalibrateScaleOffset(const Eigen::Matrix3d& rotation, Eigen::Vector3d* out_scaleOffset, float* out_scaleFactor) const {
-	// @TODO: figure out where the target and ref
+        std::vector<Eigen::Vector3d> refPoints;
+        std::vector<Eigen::Vector3d> targetPoints;
+
+        for (const auto& sample : m_samples) {
+                if (!sample.valid) continue;
+                refPoints.push_back(sample.ref.trans);
+                targetPoints.push_back(sample.target.trans);
+        }
+
+        if (refPoints.size() < 2) {
+                if (out_scaleOffset) *out_scaleOffset = Eigen::Vector3d::Zero();
+                if (out_scaleFactor) *out_scaleFactor = 1.0f;
+                return;
+        }
+
+        Eigen::Vector3d refCentroid = Eigen::Vector3d::Zero();
+        Eigen::Vector3d targetCentroid = Eigen::Vector3d::Zero();
+        for (size_t i = 0; i < refPoints.size(); ++i) {
+                refCentroid += refPoints[i];
+                targetCentroid += targetPoints[i];
+        }
+        refCentroid /= static_cast<double>(refPoints.size());
+        targetCentroid /= static_cast<double>(targetPoints.size());
+
+        Eigen::MatrixXd refMat(3, refPoints.size());
+        Eigen::MatrixXd targetMat(3, targetPoints.size());
+        for (size_t i = 0; i < refPoints.size(); ++i) {
+                refMat.col(i) = refPoints[i] - refCentroid;
+                targetMat.col(i) = rotation * (targetPoints[i] - targetCentroid);
+        }
+
+        double numerator = (refMat.array() * targetMat.array()).sum();
+        double denominator = (targetMat.array() * targetMat.array()).sum();
+        double scale = 1.0;
+        if (denominator > 1e-9) {
+                scale = numerator / denominator;
+        }
+
+        if (out_scaleFactor) {
+                *out_scaleFactor = static_cast<float>(scale);
+        }
+        if (out_scaleOffset) {
+                *out_scaleOffset = refCentroid - scale * rotation * targetCentroid;
+        }
 }
 
 
@@ -335,15 +379,18 @@ namespace {
 	}
 }
 
-Eigen::AffineCompact3d CalibrationCalc::ComputeCalibration(const bool ignoreOutliers) const {
-	Eigen::Vector3d rotation = CalibrateRotation(ignoreOutliers);
-	Eigen::Matrix3d rotationMat = quaternionRotateMatrix(VRRotationQuat(rotation));
-	Eigen::Vector3d translation = CalibrateTranslation(rotationMat);
-	
-	Eigen::AffineCompact3d rot(rotationMat);
-	Eigen::Translation3d trans(translation);
+Eigen::AffineCompact3d CalibrationCalc::ComputeCalibration(const bool ignoreOutliers) {
+        Eigen::Vector3d rotation = CalibrateRotation(ignoreOutliers);
+        Eigen::Matrix3d rotationMat = quaternionRotateMatrix(VRRotationQuat(rotation));
+        Eigen::Vector3d translation;
+        float scaleFactor = 1.0f;
+        CalibrateScaleOffset(rotationMat, &translation, &scaleFactor);
+        m_scaleFactor = scaleFactor;
 
-	return trans * rot;
+        Eigen::AffineCompact3d rot(rotationMat);
+        Eigen::Translation3d trans(translation);
+
+        return trans * rot;
 }
 
 
