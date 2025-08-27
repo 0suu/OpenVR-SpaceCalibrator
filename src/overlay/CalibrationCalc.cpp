@@ -112,6 +112,11 @@ void CalibrationCalc::PushSample(const Sample& sample) {
 	m_samples.push_back(sample);
 }
 
+float CalibrationCalc::Scale() const
+{
+	return m_estimatedScale;
+}
+
 void CalibrationCalc::Clear() {
 	m_estimatedTransformation.setIdentity();
 	m_isValid = false;
@@ -119,6 +124,7 @@ void CalibrationCalc::Clear() {
 	m_axisVariance = 0.0;
 	m_refToTargetPose = Eigen::AffineCompact3d::Identity();
 	m_relativePosCalibrated = false;
+	m_estimatedScale = 1.0f;
 }
 
 std::vector<bool> CalibrationCalc::DetectOutliers() const {
@@ -314,8 +320,55 @@ Eigen::Vector3d CalibrationCalc::CalibrateTranslation(const Eigen::Matrix3d &rot
 	return trans;
 }
 
-void CalibrationCalc::CalibrateScaleOffset(const Eigen::Matrix3d& rotation, Eigen::Vector3d* out_scaleOffset, float* out_scaleFactor) const {
-	// @TODO: figure out where the target and ref
+float CalibrationCalc::CalibrateScaleOffset(const Eigen::Matrix3d& rotation, Eigen::Vector3d* out_scaleOffset) const {
+	if (m_samples.size() < 2)
+	{
+		*out_scaleOffset = Eigen::Vector3d::Zero();
+		return 1.0f;
+	}
+
+	double total_scale = 0.0;
+	int count = 0;
+
+	for (size_t i = 0; i < m_samples.size(); ++i)
+	{
+		for (size_t j = i + 1; j < m_samples.size(); ++j)
+		{
+			const auto& s_i = m_samples[i];
+			const auto& s_j = m_samples[j];
+
+			if (!s_i.valid || !s_j.valid)
+			{
+				continue;
+			}
+
+			Eigen::Vector3d p_i = s_i.ref.trans;
+			Eigen::Vector3d p_j = s_j.ref.trans;
+
+			Eigen::Vector3d q_i_rotated = rotation * s_i.target.trans;
+			Eigen::Vector3d q_j_rotated = rotation * s_j.target.trans;
+
+			double dist_ref = (p_i - p_j).norm();
+			double dist_target = (q_i_rotated - q_j_rotated).norm();
+
+			if (dist_ref > 1e-6)
+			{
+				total_scale += dist_target / dist_ref;
+				count++;
+			}
+		}
+	}
+
+	*out_scaleOffset = Eigen::Vector3d::Zero();
+
+	if (count > 0)
+	{
+		return total_scale / count;
+	}
+	else
+	{
+		return 1.0f;
+	}
 }
 
 
@@ -335,11 +388,14 @@ namespace {
 	}
 }
 
-Eigen::AffineCompact3d CalibrationCalc::ComputeCalibration(const bool ignoreOutliers) const {
+Eigen::AffineCompact3d CalibrationCalc::ComputeCalibration(const bool ignoreOutliers) {
 	Eigen::Vector3d rotation = CalibrateRotation(ignoreOutliers);
 	Eigen::Matrix3d rotationMat = quaternionRotateMatrix(VRRotationQuat(rotation));
 	Eigen::Vector3d translation = CalibrateTranslation(rotationMat);
 	
+	Eigen::Vector3d scaleOffset;
+	m_estimatedScale = CalibrateScaleOffset(rotationMat, &scaleOffset);
+
 	Eigen::AffineCompact3d rot(rotationMat);
 	Eigen::Translation3d trans(translation);
 

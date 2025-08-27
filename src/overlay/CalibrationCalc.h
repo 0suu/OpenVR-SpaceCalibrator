@@ -67,6 +67,8 @@ public:
 		return m_estimatedTransformation;
 	}
 
+	float Scale() const;
+
 	const Eigen::Vector3d EulerRotation() const {
 		auto rot = m_estimatedTransformation.rotation();
 		return rot.eulerAngles(2, 1, 0) * 180.0 / EIGEN_PI;
@@ -109,7 +111,7 @@ public:
 		if (!m_samples.empty()) m_samples.pop_front();
 	}
 
-	CalibrationCalc() : m_isValid(false), m_calcCycle(0), enableStaticRecalibration(true) {}
+	CalibrationCalc() : m_isValid(false), m_calcCycle(0), m_estimatedScale(1.0f), enableStaticRecalibration(true) {}
 
 	// Debug fields
 	Eigen::Vector3d m_posOffset;
@@ -119,6 +121,7 @@ public:
 private:
 	bool m_isValid;
 	Eigen::AffineCompact3d m_estimatedTransformation;
+	float m_estimatedScale;
 	bool m_relativePosCalibrated = false;
 
 	/*
@@ -132,9 +135,9 @@ private:
 	std::vector<bool> DetectOutliers() const;
 	Eigen::Vector3d CalibrateRotation(const bool ignoreOutliers) const;
 	Eigen::Vector3d CalibrateTranslation(const Eigen::Matrix3d &rotation) const;
-	void CalibrateScaleOffset(const Eigen::Matrix3d &rotation, Eigen::Vector3d* out_scaleOffset, float* out_scaleFactor) const;
+	float CalibrateScaleOffset(const Eigen::Matrix3d &rotation, Eigen::Vector3d* out_scaleOffset) const;
 
-	Eigen::AffineCompact3d ComputeCalibration(const bool ignoreOutliers) const;
+	Eigen::AffineCompact3d ComputeCalibration(const bool ignoreOutliers);
 
 	double RetargetingErrorRMS(const Eigen::Vector3d& hmdToTargetPos, const Eigen::AffineCompact3d& calibration) const;
 	Eigen::Vector3d ComputeRefToTargetOffset(const Eigen::AffineCompact3d& calibration) const;

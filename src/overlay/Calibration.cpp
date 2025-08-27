@@ -608,6 +608,7 @@ void CalibrationTick(double time)
 	if (calibration.isValid()) {
 		ctx.calibratedRotation = calibration.EulerRotation();
 		ctx.calibratedTranslation = calibration.Transformation().translation() * 100.0; // convert to cm units for profile storage
+		ctx.calibratedScale = calibration.Scale();
 		ctx.refToTargetPose = calibration.RelativeTransformation();
 		ctx.relativePosCalibrated = calibration.isRelativeTransformationCalibrated();
 
